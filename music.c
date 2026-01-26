@@ -1,6 +1,6 @@
 #include <stdio.h>
-#include <driver/ledc.h>
-#include <math.h>
+#include "driver/ledc.h"
+#include "math.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -40,19 +40,15 @@ typedef struct chord_config
 
 /// @brief configuration of buzzers. takes the follow parameters:
 /// @param buzzers
-///
+/// amounts of buzzers on the board.
 /// @param BUZZ1_PIN
-///
-/// @param BUZZ2_PIN
-///
+/// the pins of the buzzers.
+///@param BUZZ2_PIN
 ///@param BUZZ3_PIN
-///
 ///@param ch1
-///
+/// the channels (and timers!) of the buzzers.
 ///@param ch2
-///
 ///@param ch3
-///
 typedef struct music_config
 {
     int buzzers;
@@ -112,65 +108,117 @@ void setup_buzzers(music_config_t music_conf)
         ledc_timer_config_t ledc_timer = {
             .speed_mode = LEDC_LOW_SPEED_MODE,
             .duty_resolution = 13,
-            .timer_num = 0,
+            .timer_num = music_conf.ch1,
             .freq_hz = 5000,
             .clk_cfg = LEDC_AUTO_CLK};
         ledc_timer_config(&ledc_timer);
-
-        // Configure LEDC channel
         ledc_channel_config_t ledc_channel_cfg = {
             .gpio_num = music_conf.BUZZ1_PIN,
             .speed_mode = LEDC_LOW_SPEED_MODE,
             .channel = music_conf.ch1,
-            .timer_sel = 0,
+            .timer_sel = music_conf.ch1,
             .duty = 0,
             .hpoint = 0};
         ledc_channel_config(&ledc_channel_cfg);
     }
-    // setting channel 2...
     if ((music_conf.ch2 != -1) && (music_conf.ch2 != music_conf.ch1))
     {
-        // timer 2
         ledc_timer_config_t ledc_timer2 = {
             .speed_mode = LEDC_LOW_SPEED_MODE,
             .duty_resolution = 13,
-            .timer_num = 1,
+            .timer_num = music_conf.ch2,
             .freq_hz = 5000,
             .clk_cfg = LEDC_AUTO_CLK};
         ledc_timer_config(&ledc_timer2);
-
-        // channel 2
         ledc_channel_config_t ledc_channel_cfg2 = {
             .gpio_num = music_conf.BUZZ2_PIN,
             .speed_mode = LEDC_LOW_SPEED_MODE,
             .channel = music_conf.ch2,
-            .timer_sel = 1,
+            .timer_sel = music_conf.ch2,
             .duty = 0,
             .hpoint = 0};
         ledc_channel_config(&ledc_channel_cfg2);
     }
-
-    // third channel here....
     if ((music_conf.ch3 != -1) && (music_conf.ch3 != music_conf.ch2) && (music_conf.ch3 != music_conf.ch1))
     {
-        // timer 3
         ledc_timer_config_t ledc_timer3 = {
             .speed_mode = LEDC_LOW_SPEED_MODE,
             .duty_resolution = 13,
-            .timer_num = 2,
+            .timer_num = music_conf.ch3,
             .freq_hz = 5000,
             .clk_cfg = LEDC_AUTO_CLK};
         ledc_timer_config(&ledc_timer3);
-        // channel 3
         ledc_channel_config_t ledc_channel_cfg3 = {
             .gpio_num = music_conf.BUZZ3_PIN,
             .speed_mode = LEDC_LOW_SPEED_MODE,
             .channel = music_conf.ch3,
-            .timer_sel = 2,
+            .timer_sel = music_conf.ch3,
             .duty = 0,
             .hpoint = 0};
         ledc_channel_config(&ledc_channel_cfg3);
     }
+}
+/// @brief function for playing a singular tone. for melodies interrupted by other functions,
+/// or for letting tones play indefinetly. (the one used in this project...)
+/// @param music_conf
+/// the music_config struct with buzzer pins and channel numbers.
+///@param buzzer
+/// the buzzer which is to play the given tone.
+/// @param tone
+/// the tone to play.
+/// @param time
+/// the time to play. if -1, tone will start and wont stop until stop_tone() is called.
+void play_tone(music_config_t music_conf, int buzzer, int tone, int time)
+{
+    /*
+    It should be noted, that currently the intensity of the single tone playing is hardcoded to 2000.
+    This is because it was sufficient for our use; and the function already has quite a few parameters,
+    and simplicity was preferred.
+    */
+    int tone_to_play = freq_calculation(440, tone - 49);
+    int channel = 0;
+    switch (buzzer)
+    {
+    case 1:
+        channel = music_conf.ch1;
+        break;
+    case 2:
+        channel = music_conf.ch2;
+        break;
+    case 3:
+        channel = music_conf.ch3;
+        break;
+
+    default:
+        printf("buzzer was an illegal argument... using buzzer 1.");
+        channel = music_conf.ch1;
+        break;
+    }
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, channel, 2000);
+    ledc_set_freq(LEDC_LOW_SPEED_MODE, channel, tone_to_play);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, channel);
+    if (time != -1)
+    {
+        vTaskDelay(time);
+        ledc_set_duty(LEDC_LOW_SPEED_MODE, channel, 0);
+        ledc_update_duty(LEDC_LOW_SPEED_MODE, channel);
+    }
+    return;
+}
+
+/// @brief a function to stop all currently playing tones. used in tandem with play_tone.
+/// @param music_conf
+/// the music_config struct with buzzer pins and channel numbers.
+void stop_tone(music_config_t music_conf)
+{
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, music_conf.ch1, 0);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, music_conf.ch1);
+
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, music_conf.ch2, 0);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, music_conf.ch2);
+
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, music_conf.ch3, 0);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, music_conf.ch3);
 }
 
 /// @brief function to play melody.
@@ -342,4 +390,20 @@ void play_chord(music_config_t music_conf, chord_config_t chord)
 
 void app_main()
 {
+    //------END OF MUSIC LIB----//
+    //---------------------------------------------------------------------------------------------------------------------------//
+
+    music_config_t buzzer_config_t = {
+        .BUZZ1_PIN = 10,
+        .BUZZ2_PIN = 7,
+        .BUZZ3_PIN = 1,
+        .buzzers = 3,
+        .ch1 = 0,
+        .ch2 = 1,
+        .ch3 = 2};
+    melody_config_t intro_melody = {
+        // CREATE!!!
+        .notes = {""},
+    };
+    setup_buzzers(buzzer_config_t);
 }
