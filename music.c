@@ -90,12 +90,6 @@ int freq_calculation(int root, int steps)
 
 /// @brief setting up buzzers. def_buzz_pins should be run first. channels will be used in order.
 // if channel should not be used, give it channel -1.
-///@param ch1
-/// setting first channel. default channel is 1.
-///@param ch2
-/// setting second channel. default channel is 2.
-///@param ch3
-/// setting third channel. default channel is 3.
 void setup_buzzers(music_config_t music_conf)
 {
 
